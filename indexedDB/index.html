@@ -4,12 +4,158 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document</title>
+  <style>
+    .flex-box {
+      display: flex;
+    }
+    .flex-1 {
+      flex: 1;
+    }
+    .header {}
+    .main{
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .img-cell{
+      background-color: green;
+    }
+    .img {
+      height: 100px;
+      width: 100px;
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+  </style>
 </head>
-<body>
-  <button onclick="initDB()">初始化数据库</button>
-  <button onclick="createObjectStore()">新增表</button>
-  <button onclick="insert()">新增数据</button>
-  <button onclick="getData()">读取数据</button>
+<body onload="bodyOnload()">
+  <div class="header">
+    <input type="file" 
+    id="imgfile" 
+    enctype="multipart/form-data" 
+    accept="image/png, image/jpeg"
+    name="file">
+    <button onclick="upload()">上传</button>
+    <button onclick="getImageList()">刷新列表</button>
+    <button onclick="clearList()">清空列表</button>
+  </div>
+  <div class="main">
+    
+  </div>
 </body>
-<script src="./index.js"></script>
+<script type="text/javascript">
+
+  function initDB() {
+    return new Promise(function(resolve, reject) {
+      let request = indexedDB.open('xuanjiao');
+
+        request.onupgradeneeded = function(event) {
+          const db = event.target.result;
+          //创建表 image
+          const objectStore = db.createObjectStore('image', {keyPath: 'create_time'});
+          objectStore.createIndex("create_time", "create_time", {unique: true});
+        };
+
+        request.onsuccess = function(event) {
+          resolve();
+        };
+    });
+  }
+
+  function bodyOnload() {
+    initDB();
+  }
+
+  function upload() {
+    const fileInputDOM = document.querySelector('#imgfile'),
+          imgFile = new FileReader();
+
+    if(!fileInputDOM.value) {
+      alert('请选择图片后再上传。');
+      return;
+    }
+
+    imgFile.readAsDataURL(fileInputDOM.files[0]);
+    imgFile.onload = function() {
+      let imgBase64 = this.result; //base64数据
+
+      //保存至indexedDB
+      let request = indexedDB.open('xuanjiao');
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const objectStore = db.transaction('image', 'readwrite').objectStore('image');
+        objectStore.add({
+          create_time: new Date().getTime(),
+          base64: imgBase64
+        });
+
+        objectStore.transaction.oncomplete = function() {
+          console.log('图片上传成功!');
+          fileInputDOM.value = '';
+          getImageList()
+        }
+      }
+      return;
+      //上传文件
+      const res = fetch('/upload/image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify({
+          imgBase64
+        })
+      })
+      .then(response => response.json())
+      .then(json => console.log('uploadRes', json))
+      .catch(err => console.log('Request Failed', err)); 
+    }
+  }
+
+  function getImageList() {
+    const request = indexedDB.open('xuanjiao');
+
+    request.onsuccess = function(event) {
+      const db = event.target.result;
+      let imgArr = [];
+      const objectStore = db.transaction('image').objectStore('image');
+      objectStore.openCursor().onsuccess = function(event) {
+        const cursor = event.target.result;
+        if(cursor) {
+          imgArr.push(cursor.value);
+          cursor.continue();
+        } else {
+          renderGallery(imgArr);
+        }
+      }
+    }
+  }
+
+  function renderGallery(imgArr) {
+    const mainDOM = document.querySelector('.main');
+    let imgcellHTML = '';
+
+    for(let i = 0; i < imgArr.length; i++) {
+      imgcellHTML += `
+        <div class="img-cell">
+          <div class="img" style="background-image: url('${imgArr[i].base64}')"></div>
+          <div class="btn-group">
+            <button onclick="deleteItem('${imgArr[i].create_time}')">
+              删除
+            </button>  
+          </div>
+        </div>
+      `;
+    }
+    mainDOM.innerHTML = imgcellHTML;
+  }
+
+  function clearList() {
+
+  }
+
+  function deleteItem(create_time) {
+    console.log('删除成功!')
+  }
+</script>
 </html>
