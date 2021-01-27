@@ -5,45 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document</title>
   <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+    }
+    * {
+      box-sizing: border-box;
+    }
     .flex-box {
       display: flex;
     }
     .flex-1 {
       flex: 1;
     }
-    .header {}
+    .header {
+      padding: 10px;
+      margin-bottom: 10px;
+    }
     .main{
+      border-top: 1px solid #ddd;
       display: flex;
       flex-wrap: wrap;
+      padding-top: 10px;
     }
     .img-cell{
-      background-color: green;
+      /* background-color: green; */
+      padding-bottom: 10px;
     }
     .img {
       height: 100px;
-      width: 100px;
+      width: 100%;
       background-size: contain;
       background-position: center;
       background-repeat: no-repeat;
+    }
+    .time-setting {
+      margin-top: 10px;
+    }
+    .btn-group {
+      text-align: center;
+      margin-top: 10px;
+    }
+    .file-control {
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    .footer {
+      text-align: center;
+      padding: 10px 0;
+      border-top: 1px solid #ddd;
     }
   </style>
 </head>
 <body onload="bodyOnload()">
   <div class="header">
-    <input type="file" 
-    id="imgfile" 
-    enctype="multipart/form-data" 
-    accept="image/png, image/jpeg"
-    name="file">
-    <button onclick="upload()">上传</button>
-    <button onclick="getImageList()">刷新列表</button>
-    <button onclick="clearList()">清空列表</button>
+    <div class="file-control">
+      <input type="file" 
+      id="imgfile" 
+      enctype="multipart/form-data" 
+      accept="image/png, image/jpeg"
+      name="file">
+      <button onclick="upload()">上传</button>
+      <button onclick="getImageList()">刷新列表</button>
+      <button onclick="clearList()">清空列表</button>
+    </div>
+
+    <div class="time-setting">
+
+      <div class="flex-box">
+        <div>
+          宣教开始：
+          <input type="time" id="start-time">
+        </div>
+        <div style="margin-left: 20px;">
+          宣教结束：
+          <input type="time" id="end-time">
+        </div>
+        <div style="margin-left: 20px;">
+          图片播放间隔(秒)：
+          <input style="width: 50px" type="text" id="img-interval">
+        </div>
+        <div style="margin-left: 20px;">
+          关闭宣教
+          <input type="checkbox" id="xuanjiao-cancel" >
+        </div>
+      </div>
+      <div style="text-align: center;margin-top: 10px">
+        <button onclick="xuanjiaoSetting()">保存宣教设置</button>
+      </div>
+
+    </div>
   </div>
-  <div class="main">
-    
+  <div class="main"></div>
+  <div class="footer">
+    <button>保存排序设置</button>
   </div>
 </body>
 <script type="text/javascript">
+  /**
+   * 保存宣教设置
+   */
+  function xuanjiaoSetting() {
+    let startTime = document.querySelector('#start-time').value,
+        endTime = document.querySelector('#end-time').value,
+        imgInterval = document.querySelector('#img-interval').value,
+        xuanjiaoCancel = document.querySelector('#xuanjiao-cancel').checked;
+    
+    const data = {startTime, endTime, imgInterval, xuanjiaoCancel};
+
+    // console.log('saveXuanjiaoSetting: ', data);
+
+    fetch("/xuajiao_setting", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json;charset=utf-8"
+      },
+      body: JSON.stringify(data),
+    })
+    .then(res => res.json())
+    .then(json => {
+      alert(json.msg);
+    })
+  }
+
+  /**
+   * 获取宣教设置参数
+   */ 
+  function getXuanjiaoParams() {
+    fetch("/")
+  }
 
   function initDB() {
     return new Promise(function(resolve, reject) {
@@ -62,8 +152,9 @@
     });
   }
 
-  function bodyOnload() {
-    initDB();
+  async function bodyOnload() {
+    await initDB();
+    getImageList();
   }
 
   function upload() {
@@ -86,7 +177,8 @@
         const objectStore = db.transaction('image', 'readwrite').objectStore('image');
         objectStore.add({
           create_time: new Date().getTime(),
-          base64: imgBase64
+          base64: imgBase64,
+          sort: -1,
         });
 
         objectStore.transaction.oncomplete = function() {
@@ -112,6 +204,8 @@
     }
   }
 
+  
+
   function getImageList() {
     const request = indexedDB.open('xuanjiao');
 
@@ -131,31 +225,69 @@
     }
   }
 
+  function clearList() {
+    if(!confirm('确定删除所有图片吗?')) return;
+
+    console.log('准备删除所有图片');return;
+
+    const request = indexedDB.open('xuanjiao');
+
+    request.onsuccess = function(event) {
+      const db = event.target.result;
+      const req = db.transaction('image', 'readwrite')
+                    .objectStore('image')
+                    .clear();
+      req.onsuccess = function(event) {
+        console.log('列表已清空');
+        getImageList();
+      }
+    }
+  }
+
+  function deleteItem(e) {
+    const { create_time } = e.currentTarget.dataset;
+    const request = indexedDB.open('xuanjiao');
+
+    request.onsuccess = function(event) {
+      const db = event.target.result;
+      const req = db.transaction(['image'], 'readwrite')
+                            .objectStore('image')
+                            .delete(Number(create_time));
+      req.onsuccess = function(event) {
+        console.log('删除成功: ', create_time);
+        getImageList();
+      }
+    }
+  }
+
   function renderGallery(imgArr) {
     const mainDOM = document.querySelector('.main');
+    let clientWidth = document.documentElement.clientWidth;
+    let imgcellWidth = clientWidth / 5;
     let imgcellHTML = '';
 
     for(let i = 0; i < imgArr.length; i++) {
-      imgcellHTML += `
-        <div class="img-cell">
-          <div class="img" style="background-image: url('${imgArr[i].base64}')"></div>
-          <div class="btn-group">
-            <button onclick="deleteItem('${imgArr[i].create_time}')">
-              删除
-            </button>  
-          </div>
-        </div>
-      `;
+      imgcellHTML += "" +
+        "<div class='img-cell' style='width: " + imgcellWidth + "px;'>" +
+          "<div class='img' style='background-image: url(" + imgArr[i].base64 + ");width: " + imgcellWidth + "px;height: " + imgcellWidth + "px'></div>" +
+          "<div style='text-align: center'>" + 
+            "序号:" +
+            "<input type='text' value='" + (imgArr[i].sort || '') + "' style='width: 40px' />" +
+          "</div>" + 
+          "<div class='btn-group'>" +
+            "<button onclick='deleteItem(event)' data-create_time='" + imgArr[i].create_time + "'>" +
+              "删除"	+
+            "</button>" +
+          "</div>" +
+        "</div>";
     }
     mainDOM.innerHTML = imgcellHTML;
+
+    console.log('列表刷新成功')
   }
 
-  function clearList() {
+  
 
-  }
-
-  function deleteItem(create_time) {
-    console.log('删除成功!')
-  }
+  
 </script>
 </html>
