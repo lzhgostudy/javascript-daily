@@ -98,10 +98,57 @@
   </div>
   <div class="main"></div>
   <div class="footer">
-    <button>保存排序设置</button>
+    <button onclick="imgSortSetting()">保存排序设置</button>
   </div>
 </body>
 <script type="text/javascript">
+  /**
+	 * 保存排序设置
+	 */
+	async function imgSortSetting() {
+    const imgCellDOMs = document.querySelectorAll('.img-sort');
+    let data = [];
+    Array.prototype.forEach.call(imgCellDOMs, function(dom, index) {
+      data.push({
+        create_time: dom.dataset.create_time,
+        sort: dom.value
+      });
+    });
+    console.log('imgSortSetting: ', data);
+
+    for(let i = 0; i < data.length; i++) {
+      await updateImageSort(data[i]);
+    }
+    console.log('imgSortSetting: success');
+  }
+  
+  function updateImageSort(params) {
+    return new Promise(function(resolve, reject) {
+      const request = indexedDB.open('xuanjiao');
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const objectStore = db.transaction('image', 'readwrite')
+                              .objectStore('image');
+        const req = objectStore.get(Number(params.create_time));
+
+        req.onsuccess = function(event) {
+          let data = event.target.result;
+
+          if(params.sort == data.sort) {
+            resolve();
+            return;
+          }
+
+          data.sort = params.sort || '-1';
+
+          let requestUpdate = objectStore.put(data);
+          requestUpdate.onsuccess = function(event) {
+            resolve();
+          }
+        }
+      }
+    });
+  }
   /**
    * 保存宣教设置
    */
@@ -272,7 +319,7 @@
           "<div class='img' style='background-image: url(" + imgArr[i].base64 + ");width: " + imgcellWidth + "px;height: " + imgcellWidth + "px'></div>" +
           "<div style='text-align: center'>" + 
             "序号:" +
-            "<input type='text' value='" + (imgArr[i].sort || '') + "' style='width: 40px' />" +
+            "<input data-create_time='" + imgArr[i].create_time + "' class='img-sort' type='text' value='" + (imgArr[i].sort || '') + "' style='width: 40px' />" +
           "</div>" + 
           "<div class='btn-group'>" +
             "<button onclick='deleteItem(event)' data-create_time='" + imgArr[i].create_time + "'>" +
