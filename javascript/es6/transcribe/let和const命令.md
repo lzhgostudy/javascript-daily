@@ -127,4 +127,10 @@ if (true) {
 
 上面代码中，在 `let` 命令声明变量 `tmp` 之前，都属于变量 `tmp` 的 **死区**。
 
+“暂时性死区”也意味着 `typeof` 不再是一个百分之百安全的操作。
+
+```js
+typeof x; //ReferenceError
+let x;
+```
 
