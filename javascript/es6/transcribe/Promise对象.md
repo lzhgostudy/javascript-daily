@@ -146,3 +146,99 @@ getJSON("/posts.json")
 
 如果调用resolve函数和reject函数时带有参数，那么它们的参数会被传递给回调函数。reject函数的参数通常是Error对象的实例，表示抛出的错误；resolve函数的参数除了正常的值以外，还可能是另一个Promise实例，比如像下面这样。
 
+```js
+const p1 = new Promise(function(resolve, reject) {
+  //...
+});
+
+const p2 = new Promise(function(resolve, reject) {
+  resolve(p1);
+});
+```
+
+上面代码中，p1和p2 都是 Promise 的实例，但是 p2 的 resolve 方法将p1作为参数，即一个异步操作的结果是返回另一个异步操作。
+
+注意，这时p1的状态就会传递给p2，也就是说，p1的状态决定了p2的状态，如果p1的状态是pending，那么p2的回调函数就会等待p1的状态改变；如果p1的状态已经是resolved或者rejected，那么p2的回调函数就会立刻执行。
+
+```js
+const p1 = new Promise(function(resolve, reject) {
+  setTimeout(() => reject(new Error('fail')), 3000);
+});
+
+const p2 = new Promise(function(resolve, reject) {
+  setTimeout(() => resolve(p1), 1000)
+} )
+
+p2.then(function(result) {
+  console.log(result)
+})
+.catch(error => console.log(error))
+```
+
+上面代码中，p1是一个Promise, 3秒后变成 rejected. p2 的状态在1秒后改变，resolve方法返回的是p1。由于p2返回的是另一个Promise，导致p2自己的状态无效了，由于p1的状态决定p2的状态。所以，后面的then语句都变成针对后者(p1), 又过了2秒，p1变成reject，导致触发catch方法指定的回调函数。
+
+注意，调用 resolve 或 reject 并不会终结Promise的参数函数执行。
+
+```js
+new Promise((resolve, reject) => {
+  resolve(1);
+  console.log(2)
+}).then(r => {
+  console.log(r);
+});
+```
+
+上面代码中，调用 resolve(1) 以后，后面的 console.log(2) 还是会执行，并且会首先打印出来。
+这时因为立即 resolved 的 Promise 是在本轮事件循环的末尾执行，总是晚于本轮循环的同步任务。
+
+一般来说，调用resolve或reject 以后，Promise的使命就完成了，后继操作应该放到 then 方法里面，而不应该直接写在 resolve 或 reject 的后面。所以，最好在它们前面加上 return 语句，这样就不会有意外。
+
+```js
+new Promise((resolve, reject) => {
+  return resolve(1);
+})
+```
+
+---
+
+## Promise.prototype.then()
+
+Promise 实例具有 then 方法，也就是说，then 方法是定义在原型对象 Promise.prototype上的。它的作用是为Promise实例添加状态改变时的回调函数。前面说过，then 方法的第一个参数是 resolved 状态的回调函数，第二个参数是 rejected 状态的回调函数，它们都是可选的。
+
+then 方法返回的是一个新的 Promise 实例（注意，不是原来那个Promise实例）。因此可以采用链式写法，即 then 方法后面再调用另一个 then 方法。
+
+```js
+getJSON("/posts.json").then(function(json) {
+  return json.post; 
+}).then(function(post) {
+  //...
+})
+```
+
+上面的代码使用 then 方法，依次指定了两个回调函数。第一个回调函数完成以后，会将返回结果作为参数，传入第二个回调函数。
+
+采用链式的then，可以指定一组按照次序调用的回调函数。这时，前一个回调函数，有可能返回的还是一个Promise对象，即有异步操作，这时，后一个回调函数，就会等待该Promise对象的状态发生变化，才会被调用。
+
+```js
+getJSON("/post/1.json").then(function(post) {
+  return getJSON(post.commentURL);
+}).then(function(comments) {
+  console.log("resolve: ", comments);
+}, function(err) {
+  console.log("rejected: ", err);
+})
+```
+
+上面代码中，第一个 then 方法指定的回调函数，返回的是另一个 Promise 对象，这时，第二个 then 方法指定的回调函数，就会等待这个新的Promise对象状态发生变化。如果变为 resolved，就调用第一个回调函数，如果状态变为rejected，就调用第二个回调函数。
+
+如果用箭头函数，上面的代码可以写得更简洁
+
+```js
+getJSON("/post/1.json").then(
+  post => getJSON(post.commentURL)
+).then(
+  comments => console.log("resolved: ", comments),
+  err => console.log("rejected: ", err);
+)
+```
+
