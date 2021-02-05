@@ -403,3 +403,37 @@ const promise = new Promise(function( resolve, reject ) {
 
 promise.then(function(value) { console.log(value) });
 ```
+
+上面代码中，Promise 指定在下一轮 事件循环 再抛出错误。到了那个时候，Promise 的运行已经结束了，所以这个错误是在Promise函数体外抛出的，会冒泡到最外层，成了未捕获的错误。
+
+一般建议，Promise 对象后面要跟 catch() 方法，这样可以处理 Promise 内部发生的错误。catch()方法返回的还是一个 Promise对象，因此后面还可以接着调用then()方法。
+
+```js
+const someAsyncThing = function() {
+  return new Promise(function(resolve, reject) {
+    // 下面一行会报错，因为x没有声明
+    resolve(x + 2);
+  });
+};
+
+someAsyncThing()
+.catch(function(error) {
+  console.log('oh no', error);
+})
+.then(function() {
+  console.log('carry on');
+});
+```
+
+上面代码运行完catch()方法指定的回调函数，会接着运行后面那个then()方法指定的回调函数。如果没有报错，则会跳过catch()方法。
+
+```js
+Promise.resolve()
+.catch(function(error) {
+  console.log('oh no', error);
+})
+.then(function() {
+  console.log('carry on');
+});
+// carry on
+```
