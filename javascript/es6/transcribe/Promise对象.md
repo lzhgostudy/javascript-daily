@@ -573,3 +573,211 @@ Promise.all(promises).then(function(posts) {
 });
 ```
 
+上面代码中，promises是包含 6 个 Promise 实例的数组，只有这 6 个实例的状态都变成fulfilled，或者其中有一个变为rejected，才会调用Promise.all方法后面的回调函数。
+
+下面是另一个例子。
+
+```js
+const databasePromise = connectDatabase();
+
+const booksPromise = databasePromise
+  .then(findAllBooks);
+
+const userPromise = databasePromise
+  .then(getCurrentUser);
+  
+Promise.all([
+  booksPromise,
+  userPromise
+])
+.then(([ books, user ]) => pickTopRecommendations(books, user));
+```
+
+上面代码中，booksPromise和userPromise是两个异步操作，只有等到它们的结果都返回了，才会触发pickTopRecommendations这个回调函数。
+
+注意，如果作为参数的 Promise 实例，自己定义了catch方法，那么它一旦被rejected，并不会触发Promise.all()的catch方法。
+
+```js
+const p1 = new Promise((resolve, reject) => {
+  resolve('hello');
+})
+.then(result => result)
+.catch(e => e);
+
+const p2 = new Promise((resolve, reject) => {
+  throw new Error('报错了');
+})
+.then(result => result)
+.catch(e => e);
+
+Promise.all([p1, p2])
+.then(result => console.log(result))
+.catch(e => console.log(e));
+// ["hello", Error: 报错了]
+```
+
+如果p2没有自己的catch方法，就会调用Promise.all()的catch方法。
+
+
+## Promise.race()
+
+Promise.race() 方法同样是将多个 Promise 实例，包装成一个新的 Promise 实例。
+
+```js
+const p = Promise.race([p1, p2, p3]);
+```
+
+上面代码中，只要p1、p2、p3之中有一个实例率先改变状态，p的状态就跟着改变。那个率先改变的 Promise 实例的返回值，就传递给p的回调函数。
+
+Promise.race()方法的参数与Promise.all()方法一样，如果不是 Promise 实例，就会先调用下面讲到的Promise.resolve()方法，将参数转为 Promise 实例，再进一步处理。
+
+下面是一个例子，如果指定时间内没有获得结果，就将 Promise 的状态变为reject，否则变为resolve。
+
+```js
+const p = Promise.race([
+  fetch('/resource-that-may-take-a-while'),
+  new Promise(function(resolve, reject) {
+    setTimeout(() => reject(new Error('request timeout')), 5000)
+  })
+]);
+
+p.then(console.log)
+  .catch(console.error);
+```
+
+上面代码中，如果 5 秒之内fetch方法无法返回结果，变量p的状态就会变为rejected，从而触发catch方法指定的回调函数。
+
+## Promise.allsettled()
+
+Promise.allSettled()方法接受一组Promise实例作为参数，包装成一个新的Promise实例，只有等到所有这些参数实例都返回结果，不管是 fulfilled 还是 rejected，包装实例才会结束。
+
+```js
+const promises = [
+  fetch('/api-1'),
+  fetch('/api-2'),
+  fetch('/api-3'),
+];
+
+await Promise.allSettled(promises);
+removeLoadingIndicator();
+```
+
+上面代码对服务器发出三个请求，等到三个请求都结束，不管请求成功还是失败，加载的滚动图标就会消失。
+
+该方法返回的新的 Promise 实例，一旦结束，状态总是fulfilled，不会变成rejected。状态变成fulfilled后，Promise 的监听函数接收到的参数是一个数组，每个成员对应一个传入Promise.allSettled()的 Promise 实例。
+
+```js
+const resolved = Promise.resolve(42);
+const rejected = Promise.reject(-1);
+
+const allSettledPromise = Promise.allSettled([resolved, rejected]);
+
+allSettledPromise.then(function (results) {
+  console.log(results);
+});
+```
+
+## Promise.resolve()
+
+有时需要将现有对象转为 Promise 对象，Promise.resolve()方法就起到这个作用。
+
+```js
+const jsPromise = Promise.resolve($.ajax('/whatever.json'));
+```
+
+上面代码将 jQuery 生成的deferred对象，转为一个新的 Promise 对象。
+
+Promise.resolve()等价于下面的写法。
+
+```js
+Promise.resolve('foo')
+//等价于
+new Promise(resolve => resolve('foo'))
+```
+
+Promise.resolve()方法的参数分成四种情况。
+
+（1）参数是一个 Promise 实例
+如果参数是 Promise 实例，那么Promise.resolve将不做任何修改、原封不动地返回这个实例。
+
+
+（2）参数是一个thenable对象
+thenable对象指的是具有then方法的对象，比如下面这个对象。
+
+```js
+let thenable = {
+  then: function(resolve, reject) {
+    resolve(42);
+  }
+};
+```
+
+Promise.resolve()方法会将这个对象转为 Promise 对象，然后就立即执行thenable对象的then()方法。
+
+```js
+let thenable = {
+  then: function(resolve, reject) {
+    resolve(42);
+  }
+};
+
+let p1 = Promise.resolve(thenable);
+p1.then(function (value) {
+  console.log(value);  // 42
+});
+```
+
+上面代码中，thenable对象的then()方法执行后，对象p1的状态就变为resolved，从而立即执行最后那个then()方法指定的回调函数，输出42。
+
+（3）参数不是具有then()方法的对象，或根本就不是对象
+
+如果参数是一个原始值，或者是一个不具有then()方法的对象，则Promise.resolve()方法返回一个新的 Promise 对象，状态为resolved。
+
+```js
+const p = Promise.resolve('Hello');
+
+p.then(function (s) {
+  console.log(s)
+});
+// Hello
+```
+
+上面代码生成一个新的Promise对象的实例 p。由于字符串 Hello 不属于异步操作，返回Promise实例的状态从一生成就是resolved，所以回调函数会立即执行。Promise.resolve()方法的参数，会同时传给回调函数。
+
+（4）不带有任何参数
+
+Promise.resolve()方法允许调用时不带参数，直接返回一个resolved状态的 Promise 对象。
+
+所以，如果希望得到一个 Promise 对象，比较方便的方法就是直接调用Promise.resolve()方法。
+
+```js
+const p = Promise.resolve();
+
+p.then(function () {
+  // ...
+});
+```
+
+上面代码的变量p就是一个 Promise 对象。
+
+需要注意的是，立即resolve()的 Promise 对象，是在本轮“事件循环”（event loop）的结束时执行，而不是在下一轮“事件循环”的开始时。
+
+```js
+setTimeout(function () {
+  console.log('three');
+}, 0);
+
+Promise.resolve().then(function () {
+  console.log('two');
+});
+
+console.log('one');
+
+// one
+// two
+// three
+```
+
+上面代码中，setTimeout(fn, 0)在下一轮“事件循环”开始时执行，Promise.resolve()在本轮“事件循环”结束时执行，console.log('one')则是立即执行，因此最先输出。
+
+
