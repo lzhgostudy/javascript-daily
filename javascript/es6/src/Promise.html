@@ -6,7 +6,7 @@
   <title>Document</title>
 </head>
 <body>
-  <button onclick="demo3()">Promise</button>
+  <button onclick="demo5()">Promise</button>
 </body>
 <script>
   function timeout(ms) {
@@ -15,6 +15,48 @@
       setTimeout(resolve, ms, txt);
     })
   }
+  function demo5() {
+    const p1 = new Promise((resolve, reject) => {
+      resolve('hello');
+    })
+    .then(result => result)
+    .catch(e => e);
+
+    const p2 = new Promise((resolve, reject) => {
+      throw new Error('报错了');
+    })
+    .then(result => result)
+    .catch(e => e);
+
+    Promise.all([p1, p2])
+    .then(result => console.log(result))
+    .catch(e => console.log('all catch: ', e));
+  }
+
+  function demo4 () {
+    const p1 = new Promise(function(resolve, reject) {
+      console.log('p1 Promise')
+      setTimeout(() => {
+        console.log('p1 setTimeout')
+        resolve("p1 resolved")
+        // reject(new Error('fail'))
+      }, 3000);
+    });
+
+    const p2 = new Promise(function(resolve, reject) {
+      console.log("p2 Promise")
+      setTimeout(() => {
+        console.log("p2 setTimeout")
+        resolve("hello2")
+      }, 1000)
+    } )
+
+    p2.then(function(result) {
+      console.log(result);
+    })
+    .catch(error => console.log(error))
+  }
+
   function demo() {
     timeout(1000)
     .then(value => {
