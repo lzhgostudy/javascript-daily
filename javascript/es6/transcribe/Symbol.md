@@ -154,3 +154,134 @@ a[mySymbol] // "Hello!"
 ```
 
 上面代码通过方括号结构和 `Object.defineProperty`, 将对象的属性名指定为一个Symbol值。
+
+注意，Symbol 值作为对象属性名时，不能用点运算符。
+
+```js
+const mySymbol = Symbol();
+const a = {};
+
+a.mySymbol = 'Hello!';
+a[mySymbol] // undefined
+a['mySymbol'] // "Hello!"
+```
+
+上面代码中，因为点运算符后面总是字符串，所以不会读取 `mySymbol` 作为标识名所指代的那个值，导致 `a` 的属性名实际上是一个字符串，而不是一个 Symbol 值。
+
+同理，在对象的内部，使用 Symbol 值定义属性时，Symbol 值必须放在方括号中。
+
+```js
+let s = Symbol();
+
+let obj = {
+  [s]: function (arg) { ... }
+};
+
+obj[s](123);
+
+```
+
+上面代码中，如果 `s` 不放在方括号中，该属性的键名就是字符串 `s`，而不是 `s` 所代表的那个 Symbol 值。
+
+采用增强的对象写法，上面代码的 `obj` 对象可以写得更简洁一些。
+
+```js
+let obj = {
+  [s](arg) { ... }
+}
+```
+
+Symbol 类型还可以用于定义一组常量，保证这组常量的值都是不相等的。
+
+```js
+const log = {};
+
+log.levels = {
+  DEBUG: Symbol('debug'),
+  INFO: Symbol('info'),
+  WARN: Symbol('warn')
+};
+
+console.log(log.levels.DEBUG, 'debug message');
+console.log(log.levels.INFO, 'info message');
+```
+
+下面是另外一个例子。
+
+```js
+const COLOR_RED = Symbol();
+const COLOR_GREEN = Symbol();
+
+function getComplement(color) {
+  switch(color) {
+    case COLOR_RED: 
+      return COLOR_GREEN;
+    case COLOR_GREEN:
+      return COLOR_RED;
+    default:
+      throw new Error('Undefined color');
+  }
+}
+```
+
+常量使用Symbol值最大的好处，就是其他任何值都不可能有相同的值了，因此可以保证上面的 `switch` 语句会按设计的方式工作。
+
+还有一点要注意，Symbol值作为属性名时，该属性还是公开属性，不是私有属性。
+
+---
+
+## 4. 实例：消除魔术字符串
+
+魔术字符串是指，在代码中出现多次，与代码形成强耦合的某一个具体的字符串或者数值。风格良好的代码，应该尽量消除魔术字符串，改由含义清晰的变量代替。
+
+```js
+function getArea(shape, options) {
+  let area = 0;
+
+  switch (shape) {
+    case 'Triangle': // 魔术字符串
+      area = .5 * options.width * options.height;
+      break;
+    /* ... more code ... */
+  }
+
+  return area;
+}
+
+getArea('Triangle', { width: 100, height: 100 }); // 魔术字符串
+```
+
+上面代码中，字符串Triangle就是一个魔术字符串。它多次出现，与代码形成“强耦合”，不利于将来的修改和维护。
+
+常用的消除魔术字符串的方法，就是把它写成一个变量。
+
+```js
+const shapeType = {
+  triangle: 'Triangle'
+};
+
+function getArea(shape, options) {
+  let area = 0;
+  switch (shape) {
+    case shapeType.triangle:
+      area = .5 * options.width * options.height;
+      break;
+  }
+  return area;
+}
+
+getArea(shapeType.triangle, { width: 100, height: 100 });
+```
+
+上面代码中，我们把Triangle写成shapeType对象的triangle属性，这样就消除了强耦合。
+
+如果仔细分析，可以发现 `shapeType.triangle` 等于哪个值并不重要，只要确保不会跟其他 `shapeType` 属性的值冲突即可。因此，这里很适合改用 Symbol 值。
+
+```js
+const shapeType = {
+  triangle: Symbol()
+};
+```
+
+上面代码中，除了将shapeType.triangle的值设为一个 Symbol，其他地方都不用修改。
+
