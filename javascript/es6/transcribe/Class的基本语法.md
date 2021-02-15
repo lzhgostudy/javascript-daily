@@ -521,3 +521,468 @@ myObj.getThis() === myObj // true
 ```
 
 箭头函数内部的 `this` 总是指向定义时所在的对象。上面代码中，箭头函数位于构造函数内部，它的定义生效的时候，是在构造函数执行的时候。这时，箭头函数所在的运行环境，肯定是实例对象，所以 `this` 会总是指向实例对象。
+
+
+## 2. 静态方法
+
+类相当于实例的原型，所有在类中定义的方法，都会被实例继承。如果在一个方法前，加上 `static` 关键字，就表示这个方法不会被实例继承，而是直接通过类来调用，这个称为 “静态方法”。
+
+```js
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+Foo.classMethod() // 'hello'
+
+var foo = new Foo();
+foo.classMethod()
+// TypeError: foo.classMethod is not a function
+```
+
+上面代码中，`Foo` 类的 `classMethod` 方法前有 `static` 关键字，表明该方法是一个静态方法，可以直接在 `Foo` 类上调用，而不是在`Foo` 类的实例上调用。如果在实例上调用静态方法，会抛出一个错误，表示不存在该方法。
+
+注意，如果静态方法包含 `this` 关键字，这个 `this` 指的是类，而不是实例。
+
+```js
+class Foo {
+  static bar() {
+    this.baz()
+  }
+  static baz() {
+    console.log('hello')
+  }
+  baz() {
+    console.log('world')
+  }
+}
+```
+
+上面代码中，静态方法 `bar` 调用了 `this.baz`, 这里的 `this` 指的是 `Foo` 类，而不是 `Foo` 的实例，等同于调用 `Foo.baz` 。另外，从这个例子中还可以看出，静态方法可以与非静态方法重名。
+
+父类的静态方法，可以被子类继承。
+
+```js
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+class Bar extends Foo {
+
+}
+
+Bar.classMethod() // hello
+```
+
+上面代码中，父类 `Foo` 有一个静态方法，子类 `Bar` 可以调用这个方法。
+
+静态方法也可以从 `super` 对象上调用的。
+
+```js
+class Foo {
+  static classMethod() {
+    return 'hello';
+  }
+}
+
+class Bar extends Foo {
+  static classMethod() {
+    return super.classMethod() + ', too';
+  }
+}
+
+Bar.classMethod() // hello, too
+```
+
+### 3. 实例属性的新写法
+
+实例属性除了定义在 `constructor()` 方法里面的 `this` 上面，也可以定义在类的最顶层。
+
+```js
+class Foo {
+  constructor() {
+    this._count = 0;
+  }
+  get value() {
+    console.log('Getting the current value!');
+    return this._count;
+  }
+  increment() {
+    this._count++;
+  }
+}
+```
+上面代码中，实例属性 `this._count` 定义在 `constructor()`方法里面。另一种写法是，这个属性也可以定义在类的最顶层，其他不变。
+
+```js
+class Foo {
+  _count = 0;
+  get value() {
+    console.log('Getting the current value!');
+    return this._count;
+  }
+  increment() {
+    this._count++;
+  }
+}
+```
+
+上面代码中，实例属性_count与取值函数value()和increment()方法，处于同一个层级。这时，不需要在实例属性前面加上this。
+
+这种新写法的好处是，所有实例对象自身的属性都定义在类的头部，看上去比较整齐，一眼就能看出这个类有哪些实例属性。
+
+```js
+class foo {
+  bar = 'hello';
+  baz = 'world';
+
+  constructor() {
+    // ...
+  }
+}
+```
+
+上面的代码，一眼就能看出，foo类有两个实例属性，一目了然。另外，写起来也比较简洁。
+
+
+### 4. 静态属性
+
+静态属性值得是Class 本身的属性，即 `Class.propName`, 而不是定义在实例对象上的属性。
+
+```js
+class Foo {}
+
+Foo.prop = 1;
+Foo.prop // 1
+```
+
+上面的写法为 `Foo` 类定义了一个静态属性 `prop`。
+
+目前，只有这种写法可行，因为 ES6 明确规定，Class 内部只有静态方法，没有静态属性。现在有一个提案提供了静态属性，写法是在实例属性前面加上 `static` 关键字。
+
+```js
+class MyClass {
+  static myStaticProp = 42;
+
+  constructor() {
+    console.log(MyClass.myStaticProp); // 42
+  }
+}
+```
+
+这个新写法大大方便了静态属性的表达。
+
+```js
+// 老写法
+class Foo {
+  // ...
+}
+Foo.prop = 1;
+
+// 新写法
+class Foo {
+  static prop = 1;
+}
+```
+
+上面代码中，老写法的静态属性定义在类的外部。整个类生成以后，再生成静态属性。这样让人很容易忽略这个静态属性，也不符合相关代码应该放在一起的代码组织原则。另外，新写法是显式声明的，而不是赋值处理，语义更好。
+
+
+### 5. 私有方法和私有属性
+
+#### 现有的解决方案
+
+私有方法和私有属性，是只能在类的内部访问的方法和属性，外部不能访问。这时常见需求，有利于代码封装，但ES6不提供，只能通过变通的方法模拟实现。
+
+一种做法是在命名上加以区分。
+
+```js
+class Widget {
+  //公有方法
+  foo(baz) {
+    this._bar(baz)
+  }
+
+  //私有方法
+  _bar(baz) {
+    return this.snaf = baz;
+  }
+
+  // ...
+}
+```
+
+上面代码中，`_bar()` 方法前面的下划线，表示这是一个只限于内部使用的私有方法。但是，这种命名是不保险的，在类的外部还是可以调用到这个方法。
+
+另一种方法就是索性将私有方法移出类，因为类内部的所有方法都是对外可见的。
+
+```js
+class Widget {
+  foo(baz) {
+    bar.call(this, baz);
+  }
+
+  // ...
+}
+
+function bar(baz) {
+  return this.snaf = baz;
+}
+```
+
+上面代码中，`foo`是公开的方法，内部调用了 `bar.call(this, baz)` 。使得 `bar()` 实际上成为了当前类的私有方法。
+
+还有一种方法是利用 `Symbol` 值的唯一性，将私有方法的名字命名为一个 `Symbol` 值。
+
+```js
+const bar = Symbol('bar');
+const snaf = Symbol('snaf');
+
+export default class myClass {
+  //公有方法
+  foo(baz) {
+    this[bar](baz)
+  }
+
+  //私有方法
+  [bar](baz) {
+    return this[snaf] = baz;
+  }
+}
+```
+
+上面代码中，`bar` 和 `snaf` 都是 `Symbol` 值，一般情况下无法获取到它们，因此达到了私有方法和私有属性的效果。但是也不是绝对不行，`Reflect.ownKeys()` 依然可以拿到它们。
+
+```js
+const inst = new myClass();
+
+Reflect.ownKeys(myClass.prototype)
+```
+
+上面代码中，Symbol 值的属性名依然可以从类的外部拿到。
+
+### 私有属性的提案
+
+目前，有一个提案，为 `class` 加了私有属性。方法是在属性名之前，使用 `#` 表示。
+
+```js
+class Foo {
+  #count = 0;
+  get value() {
+    return this.#count;
+  }
+  increment() {
+    this.#count++;
+  }
+}
+```
+
+上面代码中， `#count` 就是私有属性，只能在类的内部使用（`this.#count`）。如果在类的外部使用，就会报错。
+
+```js
+const counter = new Foo();
+counter.#count //报错
+counter.#count = 42 //报错
+```
+
+上面代码在类的外部，读取私有属性，就会报错。
+
+下面是另外一个例子。
+
+```js
+class Point {
+  #x;
+
+  constructor(x = 0) {
+    this.#x = +x
+  }
+
+  get x() {
+    return this.#x;
+  }
+
+  set x(value) {
+    this.#x = +value;
+  }
+}
+```
+
+上面代码中，`#x` 就是私有属性，在`Point` 类之外是读取不到这个属性的。由于井号`#` 是属性名的一部分，使用时必须带有 `#` 一起使用，所以 `#x` 和 `x` 是两个不同的属性。
+
+之所以要引入一个新的前缀 `#` 表示私有属性，而没有采用 `private` 关键字，是因为Javascript 是一门动态语言，没有类型声明，使用独立的符号似乎是唯一的比较方便可靠的方法，能够准确地区分一种属性是否为私有属性。另外，Ruby 语言使用 `@` 表示私有属性，ES6 没有用这个符号而使用 `#`，是因为 `@` 已经被留给了 Decorator。
+
+这种写法不仅可以写私有属性，还可以用来写私有方法。
+
+```js
+class Foo {
+  #a;
+  #b;
+  constructor(a, b) {
+    this.#a = a;
+    this.#b = b;
+  }
+  #sum() {
+    return this.#a + this.#b;
+  }
+  printSum() {
+    console.log(this.#sum());
+  }
+}
+```
+
+上面代码中，`#sum()` 就是一个私有方法。
+
+另外，私有属性也可以设置 getter 和 setter 方法。
+
+```js
+class Counter {
+  #xValue = 0;
+
+  constructor() {
+    super();
+    // ...
+  }
+
+  get #x() { return #xValue; }
+  set #x(value) {
+    this.#xValue = value
+  }
+}
+```
+
+上面代码中，`#x` 是一个私有属性，它的读写都通过 `get #x()` 和 `set #x()` 来完成。
+
+私有属性不限于从 `this` 引用，只要是在类的内部，实例也可以引用私有属性。
+
+```js
+class Foo {
+  #privateValue = 42;
+  static getPrivateValue(foo) {
+    return foo.#privateValue;
+  }
+}
+
+Foo.getPrivateValue(new Foo()); // 42
+```
+
+上面代码允许从实例 `foo` 上面引用私有属性。
+
+私有属性和私有方法前面，也可以加上 `static` 关键字，表示这是一个静态的私有属性或私有方法。
+
+```js
+class FakeMath {
+  static PI = 22 / 7;
+  static #totallyRandomNumber = 4;
+
+  static #computeRandomNumber() {
+    return FakeMath.#totallyRandomNumber
+  }
+
+  static random() {
+    console.log('I heard you like random numbers…')
+    return FakeMath.#computeRandomNumber();
+  }
+}
+
+FakeMath.PI // 3.142857142857143
+FakeMath.random()
+
+FakeMath.#totallyRandomNumber // 报错
+FakeMath.#computeRandomNumber() // 报错
+```
+
+上面代码中，#totallyRandomNumber是私有属性，#computeRandomNumber()是私有方法，只能在FakeMath这个类的内部调用，外部调用就会报错。
+
+## 6. new.target 属性
+
+`new` 是从构造函数生成实例对象的命令。 ES6 为 `new` 命令引入了一个 `new.target` 属性，该属性一般用在构造函数之中，返回 `new` 命令作用于的那个构造函数。如果构造函数不是通过 `new` 命令或 `Reflect.contructor()` 调用的， `new.target` 会返回 `undefined` ，因此这个属性可以用来确定构造函数是怎样调用的。
+
+```js
+function Person(name) {
+  if (new.target !== undefined) {
+    this.name = name;
+  } else {
+    throw new Error('必须使用 new 命令生成实例')
+  }
+}
+
+
+// 另一种写法
+function Person(name) {
+  if (new.target === Person) {
+    this.name = name;
+  }else {
+    throw new Error('必须使用 new 命令生成实例');
+  }
+}
+
+var person = new Person('张三'); // 正确
+var notAPerson = Person.call(person, '张三'); //报错
+```
+
+上面代码确保构造函数只能通过 `new` 命令调用。
+
+Class 内部调用 `new.target` ，返回当前Class
+
+```js
+class Rectangle {
+  constructor(length, width) {
+    console.log(new.target === Rectangle);
+    this.length = length;
+    this.width = width;
+  }
+}
+
+var obj = new Rectangle(3, 4); // 输出 true
+```
+
+需要注意的是子类继承父类时，`new.target` 会返回子类。
+
+```js
+class Foo {
+  constructor(length, width) {
+    console.log(new.target === Foo);
+
+    // ...
+  }
+}
+
+class S extends Foo {
+  constructor(length, width) {
+    super(length, width)
+  }
+}
+
+var obj = new Square(3); // 输出 false
+```
+
+上面代码中，new.target会返回子类。
+
+利用这个特点，可以写出不能独立使用、必须继承后才能使用的类。
+
+```js
+class Shape {
+  constructor() {
+    if (new.target === Shape) {
+      throw new Error('本类不能实例化');
+    }
+  }
+}
+
+class Rectangle extends Shape {
+  constructor(length, width) {
+    super();
+    // ...
+  }
+}
+
+var x = new Shape();  // 报错
+var y = new Rectangle(3, 4);  // 正确
+```
+
+上面代码中，`Shape`类不能被实例化，只能用于继承。
+
+注意，在函数外部，使用`new.target`会报错。
