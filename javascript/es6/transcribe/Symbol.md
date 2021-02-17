@@ -285,3 +285,124 @@ const shapeType = {
 
 上面代码中，除了将shapeType.triangle的值设为一个 Symbol，其他地方都不用修改。
 
+## 5. 属性名的遍历
+
+Symbol 作为属性名，遍历对象的时候，该属性不会出现在`for...in`, `for...of`循环中，也不会被`Object.keys()`，`Object.getOwnProperty()`, `JSON.stringify()` 返回。
+
+但是，它也不是私有属性，有一个`Object.getOwnPropertySymbols()`方法，可以获取指定对象的所有 Symbol 属性名。该方法返回一个数组，成员是当前对象的所有用作属性名的Symbol值。
+
+```js
+const obj = {};
+let a = Symbol('a');
+let b = Symbol('b');
+
+obj[a] = 'Hello';
+obj[b] = 'World';
+
+const objectSymbols = Object.getOwnPropertySymbols(obj);
+
+objectSymbols
+// [Symbol(a), Symbol(b)]
+```
+
+上面代码是`Object.getOwnPropertySymbols()`方法的示例，可以获取所有 Symbol 属性名。
+
+下面是另一个例子，`Object.getOwnPropertySymbols()`方法与`for...in`循环、`Object.getOwnPropertyNames`方法进行对比的例子。
+
+```js
+const obj = {};
+const foo = Symbol('foo');
+
+obj[foo] = 'bar';
+
+for (let i in obj) {
+  console.log(i); // 无输出
+}
+
+Object.getOwnPropertyNames(obj) // []
+Object.getOwnPropertySymbols(obj) // [Symbol(foo)]
+```
+
+上面代码中，使用for...in循环和Object.getOwnPropertyNames()方法都得不到 Symbol 键名，需要使用Object.getOwnPropertySymbols()方法。
+
+另一个新的 API，Reflect.ownKeys()方法可以返回所有类型的键名，包括常规键名和 Symbol 键名。
+
+```js
+let obj = {
+  [Symbol('my_key')]: 1,
+  enum: 2,
+  nonEnum: 3
+};
+
+Reflect.ownKeys(obj)
+//  ["enum", "nonEnum", Symbol(my_key)]
+```
+
+由于以Symbol值作为键名，不会被常规方法遍历得到。我们可以利用这个特性，为对象定义一些非私有的、但又希望只用于内部的方法。
+
+```js
+let size = Symbol('size');
+
+class Collection {
+  constructor() {
+    this[size] = 0;
+  }
+
+  add(item) {
+    this[this[size]] = item;
+    this[size]++;
+  }
+
+  static sizeOf(instance) {
+    return instance[size];
+  }
+}
+
+let x = new Collection();
+Collection.sizeOf(x)
+
+x.add('foo');
+Collection.sizeOf(x) // 1
+
+Object.keys(x) // ['0']
+Object.getOwnPropertyNames(x) // ['0']
+Object.getOwnPropertySymbols(x) // [Symbol(size)]
+```
+
+上面代码中，对象x的size属性是一个 Symbol 值，所以Object.keys(x)、Object.getOwnPropertyNames(x)都无法获取它。这就造成了一种非私有的内部方法的效果。
+
+## 6. Symbol.for(), Symbol.keyFor()
+
+有时，我们希望重新使用同一个Symbol值，`Symbol.for()` 方法可以做到这一点。它接受一个字符串作为参数，然后搜索有没有以该参数作为名称的Symbol值。如果有，就返回这个Symbol值，否则就新建一个以该字符串为名称的Symbol值，并将其注册到全局。
+
+```js
+let s1 = Symbol.for('foo');
+let s2 = Symbol.for('foo');
+
+s1 === s2
+```
+
+上面代码中，`s1` 和 `s2` 都是Symbol值，但是它们都是由同样参数的`Symbol.for`方法生成的，所以实际上是同一个值。
+
+`Symbol.for()` 与 `Symbol()` 这两种写法，都会生成新的Symbol。它们的区别是，前者会被登记在全局环境中共搜索，后者不会。`Symbol.for()`不会每次调用就返回一个新的Symbol类型的值，而是会先检查给定的`key`是否已存在，如果不存在才会新建一个值。比如，如果你调用`Symbol.for("cat")` 30次，每次都会返回同一个Symbol值，但是调用 `Symbol("cat")` 30次，会返回30个不同的Symbol值。
+
+```js
+Symbol.for("bar") === Symbol.for("bar")
+// true
+
+Symbol("bar") === Symbol("bar")
+// false
+```
+
+上面代码中，由于Symbol()写法没有登记机制，所以每次调用都会返回一个不同的值。
+
+`Symbol.keyFor()`方法返回一个已登记的Symbol类型值的`key`。
+
+```js
+let s1 = Symbol.for("foo");
+Symbol.keyFor(s1) // "foo"
+
+let s2 = Symbol("foo");
+Symbol.keyFor(s2) // undefined
+```
+
