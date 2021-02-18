@@ -405,4 +405,191 @@ Symbol.keyFor(s1) // "foo"
 let s2 = Symbol("foo");
 Symbol.keyFor(s2) // undefined
 ```
+上面代码中，变量 `s2` 属于未登记的Symbol 值，所以返回 `undefined`。
 
+注意，`Symbol.for()` 为 Symbol 值登记的名字，是全局环境的，不管有没有在全局环境运行。
+
+```js
+function foo() {
+  return Symbol.for('bar');
+}
+
+const x = foo();
+const y = Symbol.for('bar');
+console.log(x === y); // true
+```
+
+上面代码中，`Symbol.for('bar')` 是函数内部运行的，但是生成的Symbol值是登记在全局环境的。所以，第二次运行`Symbol.for('bar')`可以取到这个Symbol`值。
+
+`Symbol.for()` 的这个全局登记特性，可以用在不同的 iframe 或 service worker 中取到同一个值。
+
+```js
+iframe = document.createElement('iframe');
+iframe.src = String(window.location);
+document.body.appendChild(iframe);
+
+iframe.contentWindow.Symbol.for('foo') === Symbol.for('foo')
+// true
+```
+
+上面代码中，iframe 窗口生成的 Symbol 值，可以在主页面得到。
+
+## 7. 实例：模块的Singleton模式
+
+Singleton模式值的是调用一个类，任何时候都返回同一个实例。
+
+对于Node来说，模块文件可以看成是一个类。怎么保证每次执行这个模块文件，返回的都是同一个实例？
+
+很容易想到，可以把实例放到顶层对象 `global`。
+
+```js
+// mod.js
+funciton A () {
+  this.foo = 'hello';
+}
+if (!global._foo) {
+  global._foo = new A();
+}
+
+module.exports = global._foo;
+```
+
+然后，加载上面的mod.js。
+
+```js
+const a = require('./mod.js');
+console.log(a.foo);
+```
+
+上面代码中，变量a任何时候加载的都是A的同一个实例。
+
+但是，这里有一个问题，全局变量global._foo是可写的，任何文件都可以修改。
+
+```js
+global._foo = { foo: 'world' };
+
+const a = require('./mod.js');
+console.log(a.foo);
+```
+
+上面的代码，会使得加载mod.js的脚本都失真。
+
+为了防止这种情况出现，我们就可以使用 Symbol。
+
+```js
+// mod.js
+const FOO_KEY = Symbol.for('foo');
+
+function A() {
+  this.foo = 'hello';
+}
+
+if (!global[FOO_KEY]) {
+  global[FOO_KEY] = new A();
+}
+
+module.exports = global[FOO_KEY];
+```
+
+上面代码中，可以保证`global[FOO_KEY]`不会被无意间覆盖，但还是可以被改写。
+
+```js
+global[Symbol.for('foo')] = { foo: 'world' };
+
+const a = require('./mod.js');
+```
+
+如果键名使用`Symbol`方法生成，那么外部将无法引用这个值，当然也就无法改写。
+
+```js
+// mod.js
+const FOO_KEY = Symbol('foo');
+
+// 后面代码相同 ……
+```
+
+上面代码将导致其他脚本都无法引用 `FOO_KEY`。但这样也有一个问题，就是如果多次执行这个脚本，每次得到的`FOO_KEY` 都是不一样的。虽然 Node 会将脚本执行的结果缓存起来 ，一般情况下，不会多次执行同一个脚本，但是用户可以手动清除缓存，所以也不是绝对可靠。
+
+---
+
+## 8. 内置的Symbol值
+
+除了定义自己使用的Symbol值以外，ES6还提供了11个内置的Symbol值，指向语言内部使用的方法。
+
+### Symbol.hasInstance
+
+对象的`Symbol.hasInstance` 属性，指向一个内部方法。当其他对象使用`instanceof`运算符，判断是否为该对象的实例时，会调用这个方法。比如，`foo instanceof Foo` 在语言内部，实际调用的是`Foo[Symbol.hasInstance](foo)`。
+
+```js
+class MyClass {
+  [Symbol.hasInstance](foo) {
+    return foo instanceof Array;
+  }
+}
+
+[1, 2, 3] instanceof new MyClass()  // true
+```
+
+上面代码中，`MyClass` 是一个类，`new MyClass()` 会返回一个实例。该实例的`Symbol.hasInstance` 方法，会在进行 `instanceof` 运算时自动调用，判断左侧的运算是否为 `Array`的实例。
+
+下面是另一个例子。
+
+```js
+class Even {
+  static [Symbol.hasInstance](obj) {
+    return Number(obj) % 2 === 0;
+  }
+}
+
+// 等同于
+const Even = {
+  [Symbol.hasInstanceof] (obj) {
+    return Number(obj) % 2 === 0;
+  }
+}
+
+1 instanceof Even // false
+2 instanceof Even // true
+12345 instanceof Even // false
+```
+
+### Symbol.iterator
+
+对象的 `Symbol.iterator` 属性，指向该对象的默认遍历器方法。
+
+```js
+const myIterable = {};
+
+myIterable[Symbol.iterator] = function* () {
+  yield 1;
+  yield 2;
+  yield 3;
+};
+
+[...myIterable] // [1, 2, 3]
+```
+
+对象进行`for...of`循环时，会调用`Symbol.iterator`方法，返回该对象的默认遍历器。
+
+```js
+class Collection {
+  *[Symbol.iterator]() {
+    let i = 0;
+    while(this[i] !== undefined) {
+      yield this[i];
+      ++i;
+    }
+  }
+}
+
+let myCollection = new Collection();
+myCollection[0] = 1;
+myCollection[1] = 2;
+
+for(let value of myCollection) {
+  console.log(value)
+}
+
+// 1
+// 2
+```
