@@ -419,3 +419,118 @@ for (let n of numbers()) {
 // 1
 // 2
 ```
+
+--- 
+
+## 4. Generator.prototype.throw()
+
+Generator函数返回的遍历器对象，都有一个`throw`方法，可以在函数体外抛出错误，然后在Generator函数体内捕获。
+
+```js
+var g = function* () {
+  try {
+    yield;
+  } catch(e) {
+    console.log('内部捕获', e);
+  }
+}
+
+var i = g();
+i.next();
+
+try {
+  i.throw('a');
+  i.throw('b');
+}catch (e) {
+  console.log('外部捕获', e);
+}
+```
+
+上面代码中，遍历器对象`i`连续抛出两个错误，第一个错误被Generator函数体内的`catch`语句捕获。`i`第二次抛出错误，由于Generator函数内部的`catch`语句已经执行过了，不会再捕捉到这个错误了，所以这个错误就被抛出了Generator函数体，被函数体外的`catch`语句捕获。
+
+`throw`方法可以接受一个参数，该参数会被`catch`语句接收，建议抛出`Error`对象的实例。
+
+```js
+var g = function* () {
+  try {
+    yield;
+  } catch (e) {
+    console.log(e);
+  }
+};
+
+var i = g();
+i.next();
+i.throw(new Error('出错了！'));
+// Error: 出错了！(…)
+```
+
+注意，不要混淆遍历器对象的throw方法和全局的throw命令。上面代码的错误，是用遍历器对象的throw方法抛出的，而不是用throw命令抛出的。后者只能被函数体外的catch语句捕获。
+
+```js
+var g = function* () {
+  while (true) {
+    try {
+      yield;
+    }catch (e) {
+      if (e != 'a') throw e;
+      console.log('内部捕获', e);
+    }
+  }
+}
+
+var i = g();
+i.next();
+
+try {
+  throw new Error('a');
+  throw new Error('b');
+} catch (e) {
+  console.log('外部捕获', e);
+}
+// 外部捕获 [Error: a]
+
+```
+
+上面代码之所以只捕获了`a`，是因为函数体外的`catch`语句块，捕获了抛出的`a`错误以后，就不会再继续`try`代码块里面剩余的语句了。
+
+如果Generator函数内部没有部署`try...catch`代码块，那么`throw`方法抛出的错误，将被外部`try...catch`代码块捕获。
+
+```js
+var g = function* () {
+  while (true) {
+    yield;
+    console.log('内部捕获', e);
+  }
+};
+
+var i = g();
+i.next();
+
+try {
+  i.throw('a');
+  i.throw('b');
+} catch (e) {
+  console.log('外部捕获', e);
+}
+// 外部捕获 a
+```
+
+上面代码中，Generator函数`g`内部没有部署`try...catch`代码块，所以抛出的错误直接被外部`catch`代码块捕获。
+
+如果Generator函数内部和外部，都没有部署`try...catch`代码块，那么程序将报错，直接中断执行。
+
+```js
+var gen = function* gen(){
+  yield console.log('hello');
+  yield console.log('world');
+}
+
+var g = gen();
+g.next();
+g.throw();
+// hello
+// Uncaught undefined
+```
+
+上面代码中，g.throw抛出错误以后，没有任何try...catch代码块可以捕获这个错误，导致程序报错，中断执行。
